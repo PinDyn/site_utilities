@@ -9,28 +9,37 @@ from frappe import _
 from frappe.utils import cint, get_request_session
 from frappe.utils.file_manager import save_file
 
-# SSRF mitigation: Cognito file links are usually S3 / CloudFront. Extend via site_config if needed.
+# SSRF mitigation: extend via site_config external_form_download_allowed_host_suffixes (list or string).
 _DEFAULT_ALLOWED_HOST_SUFFIXES = (
 	"amazonaws.com",
 	"amazoncognito.com",
 	"cloudfront.net",
+	"on.aws",  # some AWS object URLs use *.on.aws
+	"cognitoforms.com",  # Cognito Forms (non-AWS) file CDN
+	"ctfassets.net",  # Cognito Forms assets
 )
 
 
-def _download_host_allowed(url: str) -> bool:
+def _hostname_from_url(url: str) -> str | None:
 	try:
 		parsed = urlparse((url or "").strip())
 	except Exception:
-		return False
-	host = (parsed.netloc or "").lower()
-	if not host or parsed.scheme not in ("http", "https"):
-		return False
+		return None
+	if parsed.scheme not in ("http", "https"):
+		return None
+	host = parsed.hostname
+	if not host:
+		return None
+	return host.lower()
+
+
+def _download_host_allowed(hostname: str) -> bool:
 	extra = frappe.conf.get("external_form_download_allowed_host_suffixes") or []
 	if isinstance(extra, str):
 		extra = [extra]
 	for suffix in tuple(_DEFAULT_ALLOWED_HOST_SUFFIXES) + tuple(extra):
 		s = str(suffix).lower().lstrip(".")
-		if host == s or host.endswith("." + s):
+		if hostname == s or hostname.endswith("." + s):
 			return True
 	return False
 
@@ -48,8 +57,17 @@ def download_external_upload_and_attach(
 	if not file_url or not attached_to_doctype or not attached_to_name:
 		frappe.throw(_("file_url, attached_to_doctype and attached_to_name are required"))
 
-	if not _download_host_allowed(file_url):
-		frappe.throw(_("Download URL host is not allowed"))
+	hostname = _hostname_from_url(file_url)
+	if not hostname:
+		frappe.throw(_("Download URL is missing or invalid (could not parse hostname)"))
+	if not _download_host_allowed(hostname):
+		frappe.throw(
+			_(
+				"Download URL host {0} is not allowed. "
+				"Set site_config key external_form_download_allowed_host_suffixes to include its domain "
+				"(e.g. [\"yourcdn.example.com\"])."
+			).format(hostname)
+		)
 
 	name = (file_name or "attachment").strip() or "attachment"
 	name = os.path.basename(name)
