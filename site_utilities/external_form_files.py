@@ -9,16 +9,6 @@ from frappe import _
 from frappe.utils import cint, get_request_session
 from frappe.utils.file_manager import save_file
 
-# SSRF mitigation: extend via site_config external_form_download_allowed_host_suffixes (list or string).
-_DEFAULT_ALLOWED_HOST_SUFFIXES = (
-	"amazonaws.com",
-	"amazoncognito.com",
-	"cloudfront.net",
-	"on.aws",  # some AWS object URLs use *.on.aws
-	"cognitoforms.com",  # Cognito Forms (non-AWS) file CDN
-	"ctfassets.net",  # Cognito Forms assets
-)
-
 
 def _hostname_from_url(url: str) -> str | None:
 	try:
@@ -31,17 +21,6 @@ def _hostname_from_url(url: str) -> str | None:
 	if not host:
 		return None
 	return host.lower()
-
-
-def _download_host_allowed(hostname: str) -> bool:
-	extra = frappe.conf.get("external_form_download_allowed_host_suffixes") or []
-	if isinstance(extra, str):
-		extra = [extra]
-	for suffix in tuple(_DEFAULT_ALLOWED_HOST_SUFFIXES) + tuple(extra):
-		s = str(suffix).lower().lstrip(".")
-		if hostname == s or hostname.endswith("." + s):
-			return True
-	return False
 
 
 @frappe.whitelist()
@@ -57,17 +36,8 @@ def download_external_upload_and_attach(
 	if not file_url or not attached_to_doctype or not attached_to_name:
 		frappe.throw(_("file_url, attached_to_doctype and attached_to_name are required"))
 
-	hostname = _hostname_from_url(file_url)
-	if not hostname:
-		frappe.throw(_("Download URL is missing or invalid (could not parse hostname)"))
-	if not _download_host_allowed(hostname):
-		frappe.throw(
-			_(
-				"Download URL host {0} is not allowed. "
-				"Set site_config key external_form_download_allowed_host_suffixes to include its domain "
-				"(e.g. [\"yourcdn.example.com\"])."
-			).format(hostname)
-		)
+	if not _hostname_from_url(file_url):
+		frappe.throw(_("Download URL must be a valid http(s) URL with a hostname"))
 
 	name = (file_name or "attachment").strip() or "attachment"
 	name = os.path.basename(name)
