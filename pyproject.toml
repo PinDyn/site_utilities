@@ -1,0 +1,44 @@
+[project]
+name = "site_utilities"
+authors = [{ name = "marcel@pindyn.com", email = "marcel@pindyn.com" }]
+description = "Small whitelisted helpers for Server Scripts and integrations (binary downloads, etc.)"
+requires-python = ">=3.10"
+dynamic = ["version"]
+dependencies = []
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.bench.dev-dependencies]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "I", "UP", "B", "RUF"]
+ignore = [
+	"B017",
+	"B018",
+	"B023",
+	"B904",
+	"E101",
+	"E402",
+	"E501",
+	"E741",
+	"F401",
+	"F403",
+	"F405",
+	"F722",
+	"W191",
+	"UP030",
+	"UP031",
+	"UP032",
+]
+typing-modules = ["frappe.types.DF"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "tab"
+docstring-code-format = true
